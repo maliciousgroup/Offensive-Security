@@ -1,13 +1,11 @@
 import itertools
 import requests
 import asyncio
-import logging
 
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 requests.packages.urllib3.disable_warnings()
-logging.basicConfig(format='basic_auth 🠖 %(message)s', level=logging.INFO)
 
 
 class BasicAuth:
@@ -51,7 +49,7 @@ class BasicAuth:
                     )
                     for auth in queue
                 ]
-                for response in await asyncio.gather(*tasks):
+                for _ in await asyncio.gather(*tasks):
                     pass
 
 
