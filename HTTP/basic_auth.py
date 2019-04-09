@@ -12,14 +12,12 @@ class BasicAuth:
 
     def __init__(self, url, user_list, pass_list, workers):
         self.url = url
-        self.user_list = self._return_str_or_list(user_list)
-        self.pass_list = self._return_str_or_list(pass_list)
+        self.user_list = self._return_list(user_list)
+        self.pass_list = self._return_list(pass_list)
         self.workers = workers
 
     @staticmethod
-    def _return_str_or_list(item):
-        if not item:
-            return None
+    def _return_list(item):
         stub = []
         config = Path(item)
         if config.is_file():
@@ -27,7 +25,8 @@ class BasicAuth:
                 stub.append(x.rstrip())
             return stub
         else:
-            return str(item).rstrip()
+            stub.append(str(item).rstrip())
+            return stub
 
     def fetch(self, session, auth):
         with session.get(self.url, auth=auth, verify=False) as response:
@@ -72,6 +71,7 @@ def usage():
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(add_help=False, usage=usage)
     parser.add_argument('-h', '--host', action='store', dest='host', default='')
     parser.add_argument('-u', '--users', action='store', dest='users', default='')
