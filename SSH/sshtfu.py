@@ -43,7 +43,7 @@ class SshTFU:
             random.shuffle(items)
             for h, u, p in items:
                 queue.put_nowait((h, u, p))
-            print(f"\nStarting {self._workers} workers to parse {len(items)} credential pairs...")
+            print(f"Starting {self._workers} workers to parse {len(items)} credential pairs...")
             break
 
     async def consumer(self, queue):
@@ -93,6 +93,7 @@ def usage():
     u = f"""
     USAGE:
       {argv[0]} -h "192.168.1.1" -u "admin" -p /path/passwords.txt
+      {argv[0]} -h "192.168.1.1:2222" -u "admin" -p /path/passwords.txt
       {argv[0]} -h /path/hosts.txt -u /path/users.txt -p /path/passwords.txt
       {argv[0]} -h /path/hosts.txt -u /path/users.txt -p /path/passwords.txt -w 20
 
@@ -122,7 +123,7 @@ if __name__ == "__main__":
 
     if not arg.hosts or not arg.users or not arg.passwords:
         usage()
-        exit("Required options not provided. Exiting.")
+        exit()
 
     if not arg.workers:
         arg.workers = 10
