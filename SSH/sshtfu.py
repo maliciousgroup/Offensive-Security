@@ -134,7 +134,7 @@ if __name__ == "__main__":
     print(f"\n[ Malicious Group's Asynchronous SSH Bruteforce Tool ]\n")
     t = time.process_time()
 
-    MaliciousGroup = SshTFU("/tmp/hosts.txt", "/tmp/users.txt", "/tmp/passwords.txt", 20)
+    MaliciousGroup = SshTFU(arg.hosts, arg.users, arg.passwords, int(arg.workers))
     asyncio.run(MaliciousGroup.main())
 
     elapsed_time = time.process_time() - t
