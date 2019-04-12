@@ -23,6 +23,8 @@ class SshTFU:
         self._ignore_list = []
         self.found = 0
 
+        self._dead_user = ["MALICI0USUS3R"]
+
     @staticmethod
     def _return_list(item):
         stub = []
@@ -43,6 +45,10 @@ class SshTFU:
         while True:
             items = list(itertools.product(self._hf, self._uf, self._pf))
             random.shuffle(items)
+
+            false_positive = list(itertools.product(self._hf, self._dead_user, self._pf))
+            for x in false_positive:
+                items.insert(0, x)
             for h, u, p in items:
                 queue.put_nowait((h, u, p))
             print(f"Starting {self._workers} workers to parse {len(items)} credential pairs...")
@@ -63,6 +69,10 @@ class SshTFU:
                 try:
                     await asyncio.wait_for(
                         asyncssh.connect(h, username=u, password=p, port=port, known_hosts=None), timeout=5)
+                    if u is ''.join(self._dead_user):
+                        if h not in self._ignore_list:
+                            self._ignore_list.append(h)
+                        break
                     print(f" 🠖 Credentials Found: {h:16} - ({u}:{p})                                                  ")
                     self.found += 1
                 except asyncssh.PermissionDenied:
@@ -76,7 +86,7 @@ class SshTFU:
                         self._timeout_list.append(h)
                 except asyncssh.ProtocolError as e:
                     break
-                except Exception as e:
+                except Exception:
                     continue
                 break
             queue.task_done()
