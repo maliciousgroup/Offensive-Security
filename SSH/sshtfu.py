@@ -28,6 +28,7 @@ class SshTFU:
         self._found = 0
         self._queue_size = 0
         self._dead_user = ["MALICI0USUS3R"]
+        self._dead_pass = ["MALICI0USP455"]
 
     @staticmethod
     def _return_list(item):
@@ -53,7 +54,7 @@ class SshTFU:
             items = list(itertools.product(self._hf, self._uf, self._pf))
             random.shuffle(items)
 
-            false_positive = list(itertools.product(self._hf, self._dead_user, self._pf))
+            false_positive = list(itertools.product(self._hf, self._dead_user, self._dead_pass))
             for x in false_positive:
                 items.insert(0, x)
             for h, u, p in items:
