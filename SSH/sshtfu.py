@@ -96,15 +96,16 @@ class SshTFU:
                 except asyncssh.ProtocolError as e:
                     break
                 except socket.error as e:
-                    if e.args[0] == 104 or 111:
+                    if e.args[0] == 104:
                         if h in self._timeout_list:
                             if h not in self._ignore_list:
                                 self._ignore_list.append(h)
                                 break
                         elif h not in self._timeout_list:
                             self._timeout_list.append(h)
-                except Exception:
-                    continue
+                            continue
+                except Exception as e:
+                    break
                 break
             queue.task_done()
 
