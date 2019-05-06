@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import itertools
 import asyncssh
 import argparse
@@ -8,7 +6,6 @@ import asyncio
 import socket
 import random
 import time
-
 from sys import argv
 from pathlib import Path
 
